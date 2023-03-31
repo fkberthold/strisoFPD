@@ -13,12 +13,7 @@ base_accel = 0.000000001 * hslider("base_accel", 5, 0.01, 100, 0.01);
 max_inc = 40;
 
 
-xstates_old = xstates_fun_down(abs(y)) with {
-    y = my_sus(1.5, hslider("Push", 0, -1, 1, 0.01));
-};
-
-
-y_in = my_sus(1.5, hslider("Push", 0, -1, 1, 0.01));
+y_in = my_sus(2.5, hslider("Push", 0, -1, 1, 0.01));
 dn = y_in < 0;
 y_pos = abs(y_in);
 low_lvl = 0.1;
@@ -44,9 +39,10 @@ my_sus(reset_time_sec, val_in) = (ba.time, val_in) : (my_sus_rec~(_,_)) : (!,_) 
         timeout_cont = last_timeout;
         sign_changed = (ma.signum(last_out) != ma.signum(val_in)) & (val_in != 0);
         bigger = abs(last_out) <= abs(val_in);
+        half_bigger = abs(last_out/2) <= abs(val_in);
         times_up = cur_time >= last_timeout;
         val_out = ba.if(sign_changed | times_up | bigger, val_reset, val_cont);
-        new_timeout = ba.if(sign_changed | times_up | bigger, timeout_reset, timeout_cont);
+        new_timeout = ba.if(sign_changed | times_up | bigger | half_bigger, timeout_reset, timeout_cont);
     };
 };
 
