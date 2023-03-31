@@ -106,8 +106,8 @@ get_amplitude = (get_amplitude_rec ~ (_, _)) : (!, _) with {
     };
 };
 
-amp_in = hslider("Amplitude In", 0, 0, 1.0, 0.01);
-throttle_in = hslider("Throttle In", 0, 0, 1.0, 0.01);
+amp_in = hslider("Amplitude", 0, 0, 1.0, 0.01);
+throttle_in = hslider("Throttle", 0, 0, 1.0, 0.01);
 
 
 process = (amp_in, throttle_in) : get_amplitude;
