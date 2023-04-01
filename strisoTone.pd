@@ -1,4 +1,4 @@
-#N canvas 296 104 1380 833 10;
+#N canvas 309 362 1380 833 10;
 #X obj 189 502 outlet~ wave;
 #X obj 32 20 inlet channel;
 #X obj 32 69 strisoNote;
@@ -12,7 +12,7 @@
 #X obj 137 99 t b f;
 #X obj 176 356 WaveGen~;
 #X obj 257 285 r waveC;
-#X obj 88 410 fvol~;
+#X obj 79 435 fvol~;
 #X obj 12 497 print;
 #X floatatom 72 157 5 0 0 0 - - -;
 #X obj 77 201 min 40;
@@ -20,6 +20,14 @@
 #X obj 94 282 / 40;
 #X msg 8 371 Amplitude \$1;
 #X msg 128 384 Throttle \$1;
+#X obj 364 286 r attackK;
+#X msg 366 345 Attack \$1;
+#X obj 451 285 r decayK;
+#X msg 453 344 Decay \$1;
+#X msg 553 347 Release \$1;
+#X obj 551 288 r releaseK;
+#X obj 659 285 r quickK;
+#X msg 661 344 Quick \$1;
 #X connect 1 0 2 0;
 #X connect 2 0 8 0;
 #X connect 2 1 15 0;
@@ -42,3 +50,11 @@
 #X connect 19 0 13 0;
 #X connect 19 0 14 0;
 #X connect 20 0 13 0;
+#X connect 21 0 22 0;
+#X connect 22 0 13 0;
+#X connect 23 0 24 0;
+#X connect 24 0 13 0;
+#X connect 25 0 13 0;
+#X connect 26 0 25 0;
+#X connect 27 0 28 0;
+#X connect 28 0 13 0;

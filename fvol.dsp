@@ -13,10 +13,10 @@ NEG = 0;
 POS = 1;
 
 // The time to remain in each state
-ATTACK_TIME = (hslider("Attack", 0, 0.01, 1.0, 0.001)) * ma.SR;
-DECAY_TIME = (hslider("Decay", 0, 0.01, 1.0, 0.001)) * ma.SR;
-RELEASE_TIME = (hslider("Release", 0, 0.01, 1.0, 0.001)) * ma.SR;
-QUICK_RELEASE_TIME = (hslider("Quick", 0, 0.01, 1.0, 0.001)) * ma.SR;
+ATTACK_TIME = (hslider("Attack", 0.01, 0.01, 1.0, 0.001)) * ma.SR;
+DECAY_TIME = (hslider("Decay", 0.01, 0.01, 1.0, 0.001)) * ma.SR;
+RELEASE_TIME = (hslider("Release", 0.01, 0.01, 1.0, 0.001)) * ma.SR;
+QUICK_RELEASE_TIME = (hslider("Quick", 0.01, 0.01, 1.0, 0.001)) * ma.SR;
 
 // How much attack goes over the target.
 ATTACK_MOD = 1.2;
@@ -113,5 +113,10 @@ get_amplitude = (get_amplitude_rec ~ (_, _)) : (!, _) with {
 amp_in = hslider("Amplitude", 0, 0, 1.0, 0.01);
 throttle_in = hslider("Throttle", 0, 0, 1.0, 0.01);
 
-process = (amp_in, throttle_in) : get_amplitude;
+easeInOutQuad(x) = number with {
+    number = ba.if(x < 0.5, 2 * x * x,
+                   1 - ((-2 * x + 2) ^ 2) / 2);
+};
+
+process = (amp_in, throttle_in) : get_amplitude : an.amp_follower_ar(0.001, 0.001);
 
