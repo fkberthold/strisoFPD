@@ -15,11 +15,11 @@ POS = 1;
 // The time to remain in each state
 ATTACK_TIME = (hslider("Attack", 0.01, 0.01, 1.0, 0.001)) * ma.SR;
 DECAY_TIME = (hslider("Decay", 0.01, 0.01, 1.0, 0.001)) * ma.SR;
-RELEASE_TIME = (hslider("Release", 0.01, 0.01, 1.0, 0.001)) * ma.SR;
+RELEASE_TIME = (hslider("Release", 0.01, 0.01, 1.0, 0.001) * 5) * ma.SR;
 QUICK_RELEASE_TIME = (hslider("Quick", 0.01, 0.01, 1.0, 0.001)) * ma.SR;
 
 // How much attack goes over the target.
-ATTACK_MOD = 1.2;
+ATTACK_MOD = 1.5;
 
 // When to go from Decay to Release
 RELEASE_THRESHOLD = 0.0;
