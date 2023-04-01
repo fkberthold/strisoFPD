@@ -92,7 +92,7 @@ lock_on_state_change(state, val) = (state, val) : (locker~(_, _)) : (!, _) with 
 
 get_amplitude = (get_amplitude_rec ~ (_, _)) : (!, _) with {
     get_amplitude_rec(prev_state, prev_amp, pressure, throttle) = (new_state, amplitude) with {
-        pressures = amp_range(prev_state:stateout, pressure, prev_amp);
+        pressures = amp_range(prev_state, pressure, prev_amp);
         min_pressure = pressures : (!, _, !) : hbargraph("min_bg", 0, 1);
         max_pressure = pressures : (!, !, _) : hbargraph("max_bg", 0, 1);
         start_time = time_changed(prev_state);
@@ -113,9 +113,5 @@ get_amplitude = (get_amplitude_rec ~ (_, _)) : (!, _) with {
 amp_in = hslider("Amplitude", 0, 0, 1.0, 0.01);
 throttle_in = hslider("Throttle", 0, 0, 1.0, 0.01);
 
-stateout = hbargraph("state out", 0, 6);
-ampout = hbargraph("amp out", 0, 1);
-
-
-process = (amp_in, throttle_in) : get_amplitude : ampout : _ * os.osc(440);
+process = (amp_in, throttle_in) : get_amplitude;
 
