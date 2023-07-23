@@ -1,91 +1,113 @@
 import("stdfaust.lib");
 
+INIT = 0;
+ATTACK = 1;
+DECAY = 2;
+SUSTAIN = 3;
+RELEASE = 4;
+QUICK_RELEASE = 5;
+
 DECR = 0;
 INCR = 1;
 NEG = 0;
 POS = 1;
-LOW = 0;
-MID = 1;
-HIGH = 2;
 
-base_accel = 0.000000001 * hslider("base_accel", 5, 0.01, 100, 0.01);
+// The time to remain in each state
+ATTACK_TIME = 0.2 * ma.SR;
+DECAY_TIME = 0.05 * ma.SR;
+RELEASE_TIME = 1.0 * ma.SR;
+QUICK_RELEASE_TIME = 0.05 * ma.SR;
 
-max_inc = 40;
+// How much attack goes over the target.
+ATTACK_MOD = 1.2;
 
+// When to go from Decay to Release
+RELEASE_THRESHOLD = 0.07;
 
-y_in = my_sus(2.5, hslider("Push", 0, -1, 1, 0.01));
-dn = y_in < 0;
-y_pos = abs(y_in);
-low_lvl = 0.1;
-high_lvl = ba.if(dn, 0.2, 0.2 + (0.2 * y_pos));
-low_acc = 1.0;
-mid_acc = ba.if(dn, 0.5, 0.5 + (0.5 * y_pos));
-high_acc = 4.0;
-rising_toward = ba.if(dn, 20 + (10 * y_pos), 20 - (10.0 * y_pos));
-rising_away = ba.if(dn, 40 - (30 * y_pos), 40 - (30.0 * y_pos));
-falling_toward = ba.if(dn, 0.41 - (y_pos * 0.4), 0.41 + (9.59 * y_pos));
-falling_away = ba.if(dn, 5.0, 5.0 + (5.0 * y_pos));
-falling_limit = ba.if(dn, 4 - (y_pos * 3.7), 4 + (1.0 * y_pos));
-mid_limit = ba.if(dn, 20.0, 20.0 - (19.0 * y_pos));
-rising_limit = ba.if(dn, 20.0, 20.0 - (15.0 * y_pos));
+get_state(prev_state, time_since, pressure, amplitude) = next_state with {
+    // State transitions.
+    from_init = ba.if(pressure > 0, ATTACK, INIT);
+    from_attack = ba.if(time_since >= ATTACK_TIME, DECAY, ATTACK);
+    from_decay = ba.if((time_since >= DECAY_TIME) | (pressure > amplitude), SUSTAIN, ba.if(pressure <= RELEASE_THRESHOLD, RELEASE, DECAY));
+    from_sustain = ba.if(pressure < amplitude, DECAY, ba.if(pressure > amplitude, ATTACK, SUSTAIN));
+    from_release = ba.if((pressure <= 0) & (amplitude <= 0), INIT, ba.if(pressure > amplitude, QUICK_RELEASE, RELEASE));
+    from_quick_release = ba.if(time_since >= QUICK_RELEASE_TIME, INIT, QUICK_RELEASE);
 
+    next_state = ba.if(prev_state==INIT, from_init,
+                 ba.if(prev_state==ATTACK, from_attack,
+                 ba.if(prev_state==DECAY, from_decay,
+                 ba.if(prev_state==SUSTAIN, from_sustain,
+                 ba.if(prev_state==RELEASE, from_release, from_quick_release)))));
+};
 
-my_sus(reset_time_sec, val_in) = (ba.time, val_in) : (my_sus_rec~(_,_)) : (!,_) with {
-    reset_time = reset_time_sec * ma.SR;
-    my_sus_rec(last_timeout, last_out, cur_time, val_in) = (new_timeout, val_out) with {
-        val_reset = val_in;
-        val_cont = last_out;
-        timeout_reset = cur_time + reset_time;
-        timeout_cont = last_timeout;
-        sign_changed = (ma.signum(last_out) != ma.signum(val_in)) & (val_in != 0);
-        bigger = abs(last_out) <= abs(val_in);
-        half_bigger = abs(last_out/2) <= abs(val_in);
-        times_up = cur_time >= last_timeout;
-        val_out = ba.if(sign_changed | times_up | bigger, val_reset, val_cont);
-        new_timeout = ba.if(sign_changed | times_up | bigger | half_bigger, timeout_reset, timeout_cont);
+direction(prev_val, cur_val) = dir with {
+    dir = ba.if(cur_val > prev_val, POS, ba.if(cur_val < prev_val, NEG, dir));
+};
+
+inflection(prev_dir, cur_dir) = inflect with {
+    inflect = ba.if(prev_dir != cur_dir, 1, 0);
+};
+
+// The attack curve should target the amplitude of the maximum pressure + 10% since
+//  the start of the attack.  It does this by tracking the time that attack started
+//  and the current time, and figuring the time remaining as a new attack when the
+//  height shifts, and havingn to complete the curve in that time.
+attack_curve(pressure, min_pressure, max_pressure, time_since) = new_amp with {
+    new_amp = min(max_pressure * ATTACK_MOD, min_pressure + (((max_pressure * ATTACK_MOD) - min_pressure) * (time_since / ATTACK_TIME)));
+};
+
+decay_curve(pressure, min_pressure, max_pressure, time_since) = new_amp with {
+    new_amp = max(min_pressure, min_pressure + ((max_pressure - min_pressure) * (1 - (time_since / DECAY_TIME))));
+};
+
+release_curve(pressure, min_pressure, max_pressure, time_since) = new_amp with {
+    new_amp = max(0, max_pressure * (1 - (time_since / RELEASE_TIME)));
+};
+
+quick_release_curve(pressure, min_pressure, max_pressure, time_since) = new_amp with {
+    new_amp = max(0, max_pressure * (1 - (time_since / QUICK_RELEASE_TIME)));
+};
+
+// For as long as the state reamains the same, read in the current value and
+//  return the max and min across the lifetime of that state.
+amp_range(st,pres,amp) = (st, pres, amp) : range_rec ~ (_, _, _)  with {
+    range_rec(prev_state, prev_min, prev_max, cur_state, cur_pres, cur_amp) = (cur_state, new_min, new_max) with {
+        new_min = ba.if(cur_state==INIT, cur_pres, ba.if(prev_state == cur_state, min(min(prev_min, cur_pres),cur_amp), min(cur_pres, cur_amp)));
+        new_max = ba.if(cur_state==INIT, cur_pres, ba.if(prev_state == cur_state, max(max(prev_max, cur_pres),cur_amp), max(cur_pres, cur_amp)));
     };
 };
 
+// Indicates the tick when the state began.
+time_changed(state) = (state, ba.time) : lock_on_state_change;
 
-velRec(lastVal, lastTime, lastVel, valIn) = newVal, newTime, newVel with {
-    time = ba.time/ma.SR;
-    timeDiff = time - lastTime;
-    tick = timeDiff >= 0.05;
-    newTime = ba.if(tick, time, lastTime);
-    newVal = ba.if(tick, valIn, lastVal);
-    newVel = ba.if(tick, 20 * (newVal - lastVal), lastVel);
+lock_on_state_change(state, val) = (state, val) : (locker~(_, _)) : (!, _) with {
+    locker(prev_state, prev_val, cur_state, cur_val) = (cur_state, lock_val) with {
+        lock_val = ba.if(prev_state != cur_state, cur_val, prev_val);
+    };
 };
 
-velocity = (velRec~(_,_,_)) : (!, !, _);
+get_amplitude = (get_amplitude_rec ~ (_, _)) : (!, _) with {
+    get_amplitude_rec(prev_state, prev_amp, pressure, throttle) = (new_state, amplitude) with {
+        pressures = amp_range(prev_state, pressure, ba.if(prev_state == ATTACK, min(prev_amp / ATTACK_MOD, pressure), prev_amp));
+        min_pressure = pressures : (!, _, !) : hbargraph("min_bg", 0, 1);
+        max_pressure = pressures : (!, !, _) : hbargraph("max_bg", 0, 1);
+        start_time = time_changed(prev_state);
+        time_since = (ba.time - start_time);
+        full_pressure = max_pressure;
 
-
-moverec(prev_pos, prev_vel, pos_in) = (new_pos, new_vel) with {
-    new_pos = max(prev_pos + prev_vel, 0);
-    relative_pos = prev_pos - pos_in;
-    is_positive = relative_pos > 0;
-    is_rising = prev_vel > 0;
-    is_escaping = ((is_positive == 0) & (prev_vel < 0)) | ((is_positive == 1) & (prev_vel > 0)); 
-    cur_lvl = ba.if(abs(relative_pos) <= low_lvl, LOW, ba.if(abs(relative_pos) <= high_lvl, MID, HIGH));
-    limit = (ba.if(is_rising, rising_limit, falling_limit) / ma.SR);
-    direction_mod = ba.if(is_rising, ba.if(is_escaping, rising_away, rising_toward), ba.if(is_escaping, falling_away, falling_toward));
-    abs_acc = base_accel * (select3(cur_lvl, low_acc, mid_acc, high_acc) * direction_mod);
-    acc = ba.if(is_positive, -abs_acc, abs_acc);
-    acceled_vel = (prev_vel + acc);
-    limited_vel = ba.if(acceled_vel > 0, min(limit, acceled_vel), max(-limit, acceled_vel));
-    new_vel = limited_vel;
+        amplitude = ba.selectn(6, prev_state, 0,
+                                    attack_curve(pressure, min_pressure, full_pressure, time_since),
+                                    decay_curve(pressure, min_pressure, full_pressure, time_since),
+                                    pressure,
+                                    release_curve(pressure, min_pressure, full_pressure, time_since),
+                                    quick_release_curve(pressure, min_pressure, full_pressure, time_since));
+        
+        new_state = get_state(prev_state, time_since, pressure, prev_amp);
+    };
 };
 
-findPos = (calcPos ~ (_,_)) : (_,!);
+amp_in = hslider("Amplitude In", 0, 0, 1.0, 0.01);
+throttle_in = hslider("Throttle In", 0, 0, 1.0, 0.01);
 
-movement = (moverec~(_,_)) : (_, !);
 
-easeInOutQuad(x) = ba.if(x < 0.5, 2 * x * x, 1 - ((-2 * x + 2)^2) / 2);
-
-easeInOutSine(x) = (cos(ma.PI * x) - 1) / -2;
-
-easeInSine(x) = 1 - cos((x * ma.PI) / 2);
-
-id(x) = x;
-
-       
-process = (hslider("Position", 0, 0, 1, 0.001)) : movement : min(_, 0.99);
+process = (amp_in, throttle_in) : get_amplitude;
