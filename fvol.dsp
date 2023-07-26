@@ -13,20 +13,35 @@ NEG = 0;
 POS = 1;
 
 // The time to remain in each state
-ATTACK_TIME = (hslider("Attack", 0.01, 0.01, 1.0, 0.001)) * ma.SR;
-DECAY_TIME = (hslider("Decay", 0.01, 0.01, 1.0, 0.001)) * ma.SR;
-RELEASE_TIME = (hslider("Release", 0.01, 0.01, 1.0, 0.001)) * ma.SR;
-QUICK_RELEASE_TIME = (hslider("Quick", 0.01, 0.01, 1.0, 0.001)) * ma.SR;
+ATTACK_TIME = (hslider("Attack", 0.5, 0.01, 1.0, 0.001)) * ma.SR;
+DECAY_TIME = (hslider("Decay", 0.5, 0.01, 1.0, 0.001)) * ma.SR;
+RELEASE_TIME = (hslider("Release", 0.5, 0.01, 1.0, 0.001)) * ma.SR;
+QUICK_RELEASE_TIME = (hslider("Quick", 0.5, 0.01, 1.0, 0.001)) * ma.SR;
+
+ATTACK_PLUCK = 0.19;
+DECAY_PLUCK = 0.10;
+RELEASE_PLUCK = 0.3;
+QUICK_PLUCK = 0.01;
+
+ATTACK_CENTER = 0.19;
+DECAY_CENTER = 0.09;
+RELEASE_CENTER = 2.5;
+QUICK_CENTER = 0.01;
+
+ATTACK_FAST = 0.01;
+DECAY_FAST = 0.01;
+RELEASE_FAST = 0.01;
+QUICK_FAST = 0.01;
 
 // How much attack goes over the target.
-ATTACK_MOD = 1.2;
+ATTACK_MOD = 1.5;
 
 // When to go from Decay to Release
-RELEASE_THRESHOLD = 0.0;
+RELEASE_THRESHOLD = 0.07;
 
 get_state(prev_state, time_since, pressure, amplitude) = next_state with {
     // State transitions.
-    from_init = ba.if(pressure > 0, ATTACK, INIT);
+    from_init = ba.if(pressure >= RELEASE_THRESHOLD, ATTACK, INIT);
     from_attack = ba.if(time_since >= ATTACK_TIME, DECAY, ATTACK);
     from_decay = ba.if((time_since >= DECAY_TIME) | (pressure > amplitude), SUSTAIN, ba.if(pressure <= RELEASE_THRESHOLD, RELEASE, DECAY));
     from_sustain = ba.if(pressure < amplitude, DECAY, ba.if(pressure > amplitude, ATTACK, SUSTAIN));
@@ -113,10 +128,5 @@ get_amplitude = (get_amplitude_rec ~ (_, _)) : (!, _) with {
 amp_in = hslider("Amplitude", 0, 0, 1.0, 0.01);
 throttle_in = hslider("Throttle", 0, 0, 1.0, 0.01);
 
-easeInOutQuad(x) = number with {
-    number = ba.if(x < 0.5, 2 * x * x,
-                   1 - ((-2 * x + 2) ^ 2) / 2);
-};
-
-process = (amp_in, throttle_in) : get_amplitude : an.amp_follower_ar(0.001, 0.001);
+process = (amp_in, throttle_in) : get_amplitude;
 
