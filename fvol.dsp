@@ -13,13 +13,13 @@ NEG = 0;
 POS = 1;
 
 // The time to remain in each state
-ATTACK_TIME = (hslider("Attack", 0.01, 0.01, 1.0, 0.001) * 10) * ma.SR;
-DECAY_TIME = (hslider("Decay", 0.01, 0.01, 1.0, 0.001) * 10) * ma.SR;
-RELEASE_TIME = (hslider("Release", 0.01, 0.01, 1.0, 0.001) * 10) * ma.SR;
-QUICK_RELEASE_TIME = (hslider("Quick", 0.01, 0.01, 1.0, 0.001) * 10) * ma.SR;
+ATTACK_TIME = (hslider("Attack", 0.5, 0.01, 1.0, 0.001)) * ma.SR;
+DECAY_TIME = (hslider("Decay", 0.5, 0.01, 1.0, 0.001)) * ma.SR;
+RELEASE_TIME = (hslider("Release", 0.5, 0.01, 1.0, 0.001)) * ma.SR;
+QUICK_RELEASE_TIME = (hslider("Quick", 0.5, 0.01, 1.0, 0.001)) * ma.SR;
 
 // How much attack goes over the target.
-ATTACK_MOD = 1.2;
+ATTACK_MOD = 1.5;
 
 // When to go from Decay to Release
 RELEASE_THRESHOLD = 0.0;
@@ -53,7 +53,7 @@ inflection(prev_dir, cur_dir) = inflect with {
 //  and the current time, and figuring the time remaining as a new attack when the
 //  height shifts, and havingn to complete the curve in that time.
 attack_curve(pressure, min_pressure, max_pressure, time_since) = new_amp with {
-    new_amp = min(max_pressure * ATTACK_MOD, min_pressure + (((max_pressure * ATTACK_MOD) - min_pressure) * (time_since / ATTACK_TIME)));
+    new_amp = min(max_pressure, min_pressure + ((max_pressure - min_pressure) * (time_since / ATTACK_TIME)));
 };
 
 decay_curve(pressure, min_pressure, max_pressure, time_since) = new_amp with {
@@ -72,8 +72,12 @@ quick_release_curve(pressure, min_pressure, max_pressure, time_since) = new_amp 
 //  return the max and min across the lifetime of that state.
 amp_range(st,pres,amp) = (st, pres, amp) : range_rec ~ (_, _, _)  with {
     range_rec(prev_state, prev_min, prev_max, cur_state, cur_pres, cur_amp) = (cur_state, new_min, new_max) with {
+        attack_pres = cur_pres * ATTACK_MOD;
         new_min = ba.if(cur_state==INIT, cur_pres, ba.if(prev_state == cur_state, min(min(prev_min, cur_pres),cur_amp), min(cur_pres, cur_amp)));
-        new_max = ba.if(cur_state==INIT, cur_pres, ba.if(prev_state == cur_state, max(max(prev_max, cur_pres),cur_amp), max(cur_pres, cur_amp)));
+        new_max = ba.if(cur_state==INIT, cur_pres, 
+            ba.if(cur_state == ATTACK,
+                ba.if(prev_state == cur_state, max(max(prev_max, attack_pres),cur_amp), max(attack_pres, cur_amp)),
+                ba.if(prev_state == cur_state, max(max(prev_max, cur_pres),cur_amp), max(cur_pres, cur_amp))));
     };
 };
 
@@ -88,7 +92,7 @@ lock_on_state_change(state, val) = (state, val) : (locker~(_, _)) : (!, _) with 
 
 get_amplitude = (get_amplitude_rec ~ (_, _)) : (!, _) with {
     get_amplitude_rec(prev_state, prev_amp, pressure, throttle) = (new_state, amplitude) with {
-        pressures = amp_range(prev_state, pressure, ba.if(prev_state == ATTACK, min(prev_amp / ATTACK_MOD, pressure), prev_amp));
+        pressures = amp_range(prev_state:stateout, pressure, prev_amp);
         min_pressure = pressures : (!, _, !) : hbargraph("min_bg", 0, 1);
         max_pressure = pressures : (!, !, _) : hbargraph("max_bg", 0, 1);
         start_time = time_changed(prev_state);
@@ -109,5 +113,9 @@ get_amplitude = (get_amplitude_rec ~ (_, _)) : (!, _) with {
 amp_in = hslider("Amplitude", 0, 0, 1.0, 0.01);
 throttle_in = hslider("Throttle", 0, 0, 1.0, 0.01);
 
+stateout = hbargraph("state out", 0, 6);
+ampout = hbargraph("amp out", 0, 1);
 
-process = (amp_in, throttle_in) : get_amplitude;
+
+process = (amp_in, throttle_in) : get_amplitude : ampout : _ * os.osc(440);
+
